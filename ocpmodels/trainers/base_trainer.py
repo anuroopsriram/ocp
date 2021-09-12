@@ -254,6 +254,7 @@ class BaseTrainer(ABC):
             else None,
             bond_feat_dim,
             self.num_targets,
+            device=self.device.index,
             **self.config["model_attributes"],
         ).to(self.device)
 

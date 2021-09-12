@@ -56,12 +56,6 @@ class Flags:
             help="Whether to visualize a few extra things",
         )
         self.parser.add_argument(
-            "--num-workers",
-            default=0,
-            type=int,
-            help="Number of dataloader workers (default: 0 i.e. use main proc)",
-        )
-        self.parser.add_argument(
             "--print-every",
             default=10,
             type=int,
@@ -106,7 +100,7 @@ class Flags:
             help="Name of partition",
         )
         self.parser.add_argument(
-            "--slurm-mem", default=80, type=int, help="Memory (in gigabytes)"
+            "--slurm-mem", default=480, type=int, help="Memory (in gigabytes)"
         )
         self.parser.add_argument(
             "--slurm-timeout", default=72, type=int, help="Time (in hours)"

@@ -13,6 +13,9 @@ import torch
 import torch.distributed as dist
 
 
+WORLD = None
+
+
 def setup(config):
     if config["submit"]:
         node_list = os.environ.get("SLURM_STEP_NODELIST")
@@ -46,6 +49,7 @@ def setup(config):
                     assert ntasks_per_node == config["world_size"] // nnodes
                     config["rank"] = int(os.environ.get("SLURM_PROCID"))
                     config["local_rank"] = int(os.environ.get("SLURM_LOCALID"))
+                os.environ["NUM_TASKS_PER_NODE"] = str(ntasks_per_node)
 
                 logging.info(
                     f"Init: {config['init_method']}, {config['world_size']}, {config['rank']}"
@@ -83,15 +87,27 @@ def setup(config):
         dist.init_process_group(
             backend=config["distributed_backend"], init_method="env://"
         )
-    # TODO: SLURM
+        os.environ["NUM_TASKS_PER_NODE"] = str(get_world_size())                
+
+    global WORLD
+    ranks = list(range(get_world_size()))
+    WORLD = dist.new_group(ranks)
 
 
-def cleanup():
-    dist.destroy_process_group()
+def get_world_group():
+    return WORLD
+
+
+def cleanup(group=None):
+    dist.destroy_process_group(group or get_world_group())
 
 
 def initialized():
     return dist.is_available() and dist.is_initialized()
+
+
+def get_tasks_per_node():
+    return int(os.environ.get("NUM_TASKS_PER_NODE", 1))
 
 
 def get_rank():
@@ -106,19 +122,19 @@ def is_master():
     return get_rank() == 0
 
 
-def synchronize():
+def synchronize(group=None):
     if get_world_size() == 1:
         return
-    dist.barrier()
+    dist.barrier(group or get_world_group())
 
 
-def broadcast(tensor, src, group=dist.group.WORLD, async_op=False):
+def broadcast(tensor, src, group=None, async_op=False):
     if get_world_size() == 1:
         return
-    dist.broadcast(tensor, src, group, async_op)
+    dist.broadcast(tensor, src, group or get_world_group(), async_op)
 
 
-def all_reduce(data, group=dist.group.WORLD, average=False, device=None):
+def all_reduce(data, group=None, average=False, device=None):
     if get_world_size() == 1:
         return data
     tensor = data
@@ -126,7 +142,7 @@ def all_reduce(data, group=dist.group.WORLD, average=False, device=None):
         tensor = torch.tensor(data)
     if device is not None:
         tensor = tensor.cuda(device)
-    dist.all_reduce(tensor, group=group)
+    dist.all_reduce(tensor, group=group or get_world_group())
     if average:
         tensor /= get_world_size()
     if not isinstance(data, torch.Tensor):
@@ -136,7 +152,7 @@ def all_reduce(data, group=dist.group.WORLD, average=False, device=None):
     return result
 
 
-def all_gather(data, group=dist.group.WORLD, device=None):
+def all_gather(data, group=None, device=None):
     if get_world_size() == 1:
         return data
     tensor = data
@@ -147,7 +163,7 @@ def all_gather(data, group=dist.group.WORLD, device=None):
     tensor_list = [
         tensor.new_zeros(tensor.shape) for _ in range(get_world_size())
     ]
-    dist.all_gather(tensor_list, tensor, group=group)
+    dist.all_gather(tensor_list, tensor, group=group or get_world_group())
     if not isinstance(data, torch.Tensor):
         result = [tensor.cpu().numpy() for tensor in tensor_list]
     else:
