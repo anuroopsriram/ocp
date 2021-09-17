@@ -169,7 +169,9 @@ class InteractionBlockTripletsOnly(torch.nn.Module):
 
         # Initial transformation
         x_ca_skip = self.dense_ca(m)  # (nEdges, emb_size_edge)
+        print(m.shape, x_ca_skip.shape)
 
+        print(m.shape, rbf3.shape, cbf3[0].shape, cbf3[1].shape, id3_ragged_idx.shape, id_swap.shape, id3_ba.shape, id3_ca.shape)
         x3 = self.trip_interaction(
             m,
             rbf3,
